@@ -30,16 +30,70 @@ eval "$(mise activate bash)"   # or: mise activate zsh
 ### 2. The release
 
 ```sh
-VERSION=v0.5.0   # see https://github.com/asmorger/arete_cipher_cli_dist/releases
+# Resolve the newest release rather than typing a version. Substitute a
+# specific tag to reproduce an older report: the artifact and the run events
+# both name the version that produced them, and that provenance is only
+# useful if the matching install can be rebuilt.
+VERSION=$(gh release view --repo asmorger/arete_cipher_cli_dist --json tagName --jq .tagName)
+echo "installing $VERSION"
+
 gh release download "$VERSION" --repo asmorger/arete_cipher_cli_dist --pattern 'arete-cipher-cli-*'
 sha256sum -c "arete-cipher-cli-$VERSION-erlang.tar.gz.sha256"
 
 mkdir -p ~/.local/opt/arete-cipher-cli
 tar -xzf "arete-cipher-cli-$VERSION-erlang.tar.gz" -C ~/.local/opt/arete-cipher-cli
+
+~/.local/opt/arete-cipher-cli/entrypoint.sh run --version   # confirm the install
 ```
+
+Every command names its file rather than matching a pattern, which is
+deliberate. `tar -xzf arete-cipher-cli-*-erlang.tar.gz` looks like the shorter
+way to avoid naming a version, and it fails silently: with a previously
+downloaded archive still in the directory the glob expands to two paths, `tar`
+reads the first as the archive and the second as a member to extract from it,
+prints `Not found in archive`, **and exits 0** — installing nothing and
+reporting success. Measured 2026-11-19.
+
+### Updating an existing install
+
+The same commands, plus `--clobber` so the download replaces the previous
+archive, and ending on the version check — an update nobody confirmed is a
+guess:
+
+```sh
+VERSION=$(gh release view --repo asmorger/arete_cipher_cli_dist --json tagName --jq .tagName)
+echo "updating to $VERSION"
+
+gh release download "$VERSION" --repo asmorger/arete_cipher_cli_dist --pattern 'arete-cipher-cli-*' --clobber
+sha256sum -c "arete-cipher-cli-$VERSION-erlang.tar.gz.sha256"
+tar -xzf "arete-cipher-cli-$VERSION-erlang.tar.gz" -C ~/.local/opt/arete-cipher-cli
+
+arete --version
+```
+
+A failed `sha256sum -c` exits non-zero, so it stops a scripted update rather
+than letting a truncated download through; verified against a corrupted
+archive on 2026-11-19.
 
 Each release's notes state the Erlang/OTP major it was built with; the
 machine's OTP must be that major or newer.
+
+### DuckDB must be in the supported line
+
+From v0.15.0 the tool accepts **DuckDB 1.5 only** and refuses any other
+version by name before writing anything, rather than producing a report with
+errors in its panels. Any 1.5 patch is fine. It also needs DuckDB's timezone
+database — the `icu` extension — reachable, because every figure placed on a
+contributor's clock depends on it; on a build where `icu` loads on demand
+there is nothing to install, and a run that cannot resolve a named zone
+refuses and says so.
+
+Arch's `extra` ships duckdb 1.5.6 as of 2026-11-19, so `install-deps.sh` gives
+a supported engine today. **2.0.0 is already in `extra-testing`**, and a
+`pacman -Syu` after it reaches `extra` will install an engine this tool
+refuses. Check with `duckdb --version` if a run starts refusing after a system
+upgrade; versions can sit side by side under `~/.duckdb/cli/<version>/` with a
+`latest` symlink choosing between them.
 
 Run everything through the bundle's entrypoint, from any working directory —
 snapshots (`data/`) and reports (`reports/`) land relative to where you run
