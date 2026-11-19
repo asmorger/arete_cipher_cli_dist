@@ -88,12 +88,22 @@ contributor's clock depends on it; on a build where `icu` loads on demand
 there is nothing to install, and a run that cannot resolve a named zone
 refuses and says so.
 
-Arch's `extra` ships duckdb 1.5.6 as of 2026-11-19, so `install-deps.sh` gives
-a supported engine today. **2.0.0 is already in `extra-testing`**, and a
-`pacman -Syu` after it reaches `extra` will install an engine this tool
-refuses. Check with `duckdb --version` if a run starts refusing after a system
-upgrade; versions can sit side by side under `~/.duckdb/cli/<version>/` with a
-`latest` symlink choosing between them.
+`install-deps.sh` therefore **pins** duckdb rather than taking whatever
+`extra` holds: it installs an exact version from the
+[Arch Linux Archive](https://archive.archlinux.org/packages/d/duckdb/) and
+holds it back from upgrades with `IgnorePkg = duckdb` in `/etc/pacman.conf`.
+This matters on a date: `extra` has 1.5.6 today, but **2.0.0 is already in
+`extra-testing`**, and an unpinned `pacman -Syu` after it lands would install
+an engine the tool refuses.
+
+The script also verifies the engine rather than trusting its version number —
+it resolves a named timezone, which is the part a version cannot answer — and
+re-running it re-pins a machine that has drifted. `DUCKDB_FREEZE=no` installs
+the pinned version without touching `pacman.conf`.
+
+Moving the pin is editing `DUCKDB_PIN` and `DUCKDB_PKGREL` at the top of the
+script, and the tool's own supported version has to move with it, in that
+order: run its suite against the new version first.
 
 Run everything through the bundle's entrypoint, from any working directory —
 snapshots (`data/`) and reports (`reports/`) land relative to where you run
