@@ -14,9 +14,14 @@ curl -fsSL https://raw.githubusercontent.com/asmorger/arete_cipher_cli_dist/main
 ```
 
 or clone this repo and run [`install-deps.sh`](./install-deps.sh) directly.
-It installs `erlang-nox`, `github-cli`, `duckdb`, `git`, and `age` via
-`pacman`, plus [`mise`](https://mise.jdx.dev/) (via `pacman` if packaged,
+It installs Erlang/OTP, `github-cli`, `duckdb`, `git`, `age` and `postgresql`
+via `pacman`, plus [`mise`](https://mise.jdx.dev/) (via `pacman` if packaged,
 otherwise the upstream installer). It's safe to re-run.
+
+Erlang is installed as the split packages the bundle uses (`erlang-core`,
+`erlang-ssl`, `erlang-inets` and five more), because Arch no longer has
+`erlang-nox` and the `erlang` meta-package also pulls in the GUI toolkit.
+`postgresql` is only for the serving page in step 4.
 
 Two things still need a human after it runs:
 
@@ -190,6 +195,84 @@ one's outcome; see the main repo's README for the full semantics.
 If you keep several repositories this way, repeat step 3 per worktree; the
 age keypair in `~/.config/age/key.txt` is shared across all of them.
 
+### 4. Running the page
+
+The bundle carries the serving page under `serve/`, beside the CLI and at the
+same version. It shows the fleet's measures and the artifacts you have written,
+and can start loads and extractions. It needs PostgreSQL and the Erlang the
+script installed — no Elixir. It listens on `127.0.0.1:4000` only.
+
+**PostgreSQL, once per machine:**
+
+```sh
+sudo -iu postgres initdb -D /var/lib/postgres/data
+sudo systemctl enable --now postgresql
+# Under WSL without systemd, start it by hand instead. systemd would create
+# the socket directory; by hand, it has to exist first:
+#   sudo install -d -o postgres /run/postgresql
+#   sudo -iu postgres pg_ctl -D /var/lib/postgres/data -l /var/lib/postgres/log start
+
+sudo -iu postgres psql -c "create role arete login password 'choose-a-password'"
+sudo -iu postgres createdb -O arete arete
+```
+
+**The page's settings.** It refuses to boot without these three, and names the
+one that is missing:
+
+```sh
+mkdir -p ~/.config/arete && umask 077
+cat > ~/.config/arete/serve.env <<EOF
+export ARETE_PG_PASSWORD='choose-a-password'
+export SECRET_KEY_BASE='$(openssl rand -base64 48)'
+export ARETE_TOKEN_SECRET='$(openssl rand -base64 48)'
+EOF
+```
+
+The two secrets sign the session cookie and the sign-in token. Generate them
+once and keep them: a new pair signs everyone out. The user, host, port and
+database default to `arete`, `localhost`, `5432` and `arete`; set
+`ARETE_PG_USER`, `ARETE_PG_HOST`, `ARETE_PG_PORT` or `ARETE_PG_DATABASE` to
+change one. The page hands the same values to every load it starts, so the two
+cannot point at different databases.
+
+**Its tables, and the first admin.** Both run on the machine; the page has no
+registration, because anyone who can reach the port could otherwise make
+themselves an admin:
+
+```sh
+. ~/.config/arete/serve.env
+~/.local/opt/arete-cipher-cli/serve/bin/migrate
+~/.local/opt/arete-cipher-cli/serve/bin/add-user you@example.com --admin
+```
+
+`add-user EMAIL [--admin]` asks for the password without echo, or reads it from
+`ARETE_USER_PASSWORD`. A password is at least 12 characters. Without
+`--admin`, the user is a `user`:
+
+| | `user` | `admin` |
+|---|---|---|
+| read the fleet's measures | yes | yes |
+| open an artifact that names no person | yes | yes |
+| start a load, which spends nothing | yes | yes |
+| open an artifact that names a person | no, it is counted | yes |
+| start an extraction, which spends the GitHub allowance | no | yes |
+
+A role is set when the user is added. To change one, remove the user from the
+`users` table and add them again. There is no password reset.
+
+**Starting it.** Start it in the directory your `data/`, `reports/` and
+`fleet.csv` live in: the page starts the CLI there, as you would run it
+yourself.
+
+```sh
+. ~/.config/arete/serve.env
+cd ~/arete            # wherever you run arete from
+~/.local/opt/arete-cipher-cli/serve/bin/server
+```
+
+Then open <http://localhost:4000> and sign in. `migrate` is safe to re-run, and
+should be run after each update, before `server`.
+
 ## Notes
 
 - `gh` needs whatever account can read the repositories you extract; the
@@ -197,4 +280,5 @@ age keypair in `~/.config/age/key.txt` is shared across all of them.
   distribution repo is public).
 - See the [source repository](https://github.com/asmorger/arete_cipher_cli)
   for the tool's full documentation: extraction windows, snapshot layout,
-  analysis views, application segmentation, and report generation.
+  analysis views, application segmentation, report generation, and the
+  serving page.

@@ -4,7 +4,8 @@
 # (both need a human). Safe to re-run.
 #
 # Installs:
-#   - erlang-nox, github-cli, git, age (official pacman packages)
+#   - Erlang/OTP as the split packages the bundle needs, plus github-cli, git,
+#     age and postgresql (official pacman packages)
 #   - duckdb, pinned to an exact version from the Arch Linux Archive,
 #     because arete_cipher_cli accepts one DuckDB line and refuses others
 #   - mise (https://mise.jdx.dev/), for the env/secrets workflow documented
@@ -32,8 +33,17 @@ fail() {
 command -v pacman >/dev/null 2>&1 \
   || fail "pacman not found - this script targets Arch Linux (including Arch WSL)"
 
-echo "==> Installing erlang-nox, github-cli, git, age via pacman"
-sudo pacman -S --needed --noconfirm erlang-nox github-cli git age
+# Erlang is named as the split packages the bundle uses. Arch no longer has
+# erlang-nox: on 2026-11-20 `pacman -S erlang-nox` answered "target not
+# found", and the erlang meta-package would also pull in erlang-wx and its GUI
+# libraries. These are the OTP applications the CLI (inets, ssl) and the page
+# (asn1, compiler, crypto, mnesia, public_key, runtime_tools, sasl, ssl) name,
+# read from their .app and .rel files. postgresql is for the serving page.
+ERLANG_PKGS="erlang-core erlang-asn1 erlang-public_key erlang-ssl erlang-inets erlang-mnesia erlang-runtime_tools erlang-sasl"
+
+echo "==> Installing Erlang/OTP, github-cli, git, age, postgresql via pacman"
+# shellcheck disable=SC2086
+sudo pacman -S --needed --noconfirm $ERLANG_PKGS github-cli git age postgresql
 
 # DuckDB is pinned rather than installed with `pacman -S`, which would take
 # whatever `extra` currently holds. arete_cipher_cli accepts the 1.5 line and
@@ -122,7 +132,8 @@ fi
 
 cat <<'EOF'
 
-==> Dependencies installed. Two things still need a human:
+==> Dependencies installed. Two things still need a human, and a third if
+    you will run the serving page:
 
 1. Authenticate gh (any account that can read the repos you'll extract):
      gh auth login
@@ -131,6 +142,10 @@ cat <<'EOF'
    to your shell rc and open a new shell:
      eval "$(mise activate bash)"   # ~/.bashrc
      eval "$(mise activate zsh)"    # ~/.zshrc
+
+3. For the serving page only: initialise and start PostgreSQL, and create
+   the role and database it uses. See "Running the page" in this repo's
+   README.
 
 See this repo's README for installing the arete_cipher_cli release itself
 and for setting up mise.toml with the Azure DevOps identity and an
