@@ -122,6 +122,10 @@ arete git <clone-path>
 arete ado [owner/repo] [--org <url>] [--project <name>]
 arete sync [--repo <owner/repo>]
 arete report [owner/repo]
+arete fleet                           # extract every repository fleet.csv declares
+arete fleet-report                    # rank them against each other
+arete coaching-report --team <name>   # one coached team since its coaching began
+arete validate <kind> <path>          # read fleet, people, schedules or apps as arete does
 ```
 
 `[owner/repo]` is optional on `gh`, `ado`, and `report`: run from inside the
@@ -254,15 +258,22 @@ themselves an admin:
 | read the fleet's measures | yes | yes |
 | open an artifact that names no person | yes | yes |
 | start a load, which spends nothing | yes | yes |
+| generate a repository, fleet or coaching report | yes | yes |
+| read the coaching record, the fleet manifest and the application mappings | yes | yes |
 | open an artifact that names a person | no, it is counted | yes |
 | start an extraction, which spends the GitHub allowance | no | yes |
+| record coaching, or change a declaration file | no | yes |
+| read the contributor mapping or the declared schedules | no, they name people | yes |
 
 A role is set when the user is added. To change one, remove the user from the
 `users` table and add them again. There is no password reset.
 
 **Starting it.** Start it in the directory your `data/`, `reports/` and
-`fleet.csv` live in: the page starts the CLI there, as you would run it
-yourself.
+declaration files live in: the page starts the CLI there, as you would run it
+yourself. Its *Declarations* page writes `fleet.csv`, `people.csv`,
+`schedules.csv` and `apps/<owner>__<repo>.csv` there, each one read by the CLI
+before it is written. A file you already have is left alone until an admin
+adopts it on that page, which keeps every row and drops its comments.
 
 ```sh
 . ~/.config/arete/serve.env
