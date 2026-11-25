@@ -8,6 +8,8 @@
 #     age and postgresql (official pacman packages)
 #   - duckdb, pinned to an exact version from the Arch Linux Archive,
 #     because arete_cipher_cli accepts one DuckDB line and refuses others
+#   - lizard, pinned to an exact version with pipx, which the git extraction
+#     uses to measure each C# and TypeScript function (from v0.22.0)
 #   - mise (https://mise.jdx.dev/), for the env/secrets workflow documented
 #     in this repo's README - via pacman if available, else the upstream
 #     installer script
@@ -25,6 +27,11 @@ DUCKDB_PIN="${DUCKDB_PIN:-1.5.6}"
 DUCKDB_PKGREL="${DUCKDB_PKGREL:-1}"
 DUCKDB_FREEZE="${DUCKDB_FREEZE:-yes}"
 
+# The lizard the git extraction's function measures were verified against.
+# It is a Python program and is not packaged in Arch's official repositories,
+# so it is installed with pipx, for this user, into ~/.local/bin.
+LIZARD_PIN="${LIZARD_PIN:-1.26.1}"
+
 fail() {
   echo "install-deps.sh: $*" >&2
   exit 1
@@ -41,9 +48,9 @@ command -v pacman >/dev/null 2>&1 \
 # read from their .app and .rel files. postgresql is for the serving page.
 ERLANG_PKGS="erlang-core erlang-asn1 erlang-public_key erlang-ssl erlang-inets erlang-mnesia erlang-runtime_tools erlang-sasl"
 
-echo "==> Installing Erlang/OTP, github-cli, git, age, postgresql via pacman"
+echo "==> Installing Erlang/OTP, github-cli, git, age, postgresql, python-pipx via pacman"
 # shellcheck disable=SC2086
-sudo pacman -S --needed --noconfirm $ERLANG_PKGS github-cli git age postgresql
+sudo pacman -S --needed --noconfirm $ERLANG_PKGS github-cli git age postgresql python-pipx
 
 # DuckDB is pinned rather than installed with `pacman -S`, which would take
 # whatever `extra` currently holds. arete_cipher_cli accepts the 1.5 line and
@@ -120,6 +127,34 @@ else
   fail "duckdb cannot resolve a named timezone"
 fi
 
+# lizard measures each C# and TypeScript function at the newest commit and at
+# each month-end. Without it the git extraction still runs and leaves the
+# function measures out, saying so, so a failure here is a warning, not a stop.
+# It is pinned for the same reason duckdb is: the measures' known faults were
+# recorded against one version. Re-running this script re-pins it.
+lizard_version() {
+  "$HOME/.local/bin/lizard" --version 2>/dev/null | tr -d '[:space:]'
+}
+
+if [ "$(lizard_version || true)" = "$LIZARD_PIN" ]; then
+  echo "==> lizard $LIZARD_PIN already installed (pinned)"
+else
+  echo "==> Installing lizard $LIZARD_PIN with pipx (pinned)"
+  if pipx install --force "lizard==$LIZARD_PIN" >/dev/null 2>&1; then
+    echo "    installed: $(lizard_version) in ~/.local/bin"
+  else
+    echo "    WARNING: pipx could not install lizard $LIZARD_PIN." >&2
+    echo "             The git extraction will leave out the function measures." >&2
+  fi
+fi
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *)
+    echo "    ~/.local/bin is not on PATH, so arete_cipher_cli will not find lizard."
+    echo "    In fish: fish_add_path ~/.local/bin    In bash/zsh: add it to PATH in your rc."
+    ;;
+esac
+
 if command -v mise >/dev/null 2>&1; then
   echo "==> mise already installed ($(mise --version))"
 elif sudo pacman -S --needed --noconfirm mise 2>/dev/null; then
@@ -155,4 +190,8 @@ Note on DuckDB: it is pinned to an exact version and held back from
 `pacman -Syu` via IgnorePkg in /etc/pacman.conf. arete_cipher_cli accepts
 one DuckDB line and refuses any other by name, so an unpinned upgrade
 stops it working. Re-run this script to re-pin a machine that drifted.
+
+Note on lizard: it is installed for this user with pipx, pinned to one
+version, in ~/.local/bin. arete_cipher_cli finds it on PATH. Check it with
+the bundle's `doctor`, whose env.lizard.version check names it.
 EOF

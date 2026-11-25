@@ -14,9 +14,16 @@ curl -fsSL https://raw.githubusercontent.com/asmorger/arete_cipher_cli_dist/main
 ```
 
 or clone this repo and run [`install-deps.sh`](./install-deps.sh) directly.
-It installs Erlang/OTP, `github-cli`, `duckdb`, `git`, `age` and `postgresql`
-via `pacman`, plus [`mise`](https://mise.jdx.dev/) (via `pacman` if packaged,
-otherwise the upstream installer). It's safe to re-run.
+It installs Erlang/OTP, `github-cli`, `duckdb`, `git`, `age`, `postgresql` and
+`python-pipx` via `pacman`, plus [`mise`](https://mise.jdx.dev/) (via `pacman`
+if packaged, otherwise the upstream installer), and `lizard` with `pipx`. It's
+safe to re-run.
+
+`lizard` measures each C# and TypeScript function for the code health charts,
+from v0.22.0. It is pinned to one version and installed for your user in
+`~/.local/bin`, which must be on PATH for the CLI and the page to find it (in
+fish: `fish_add_path ~/.local/bin`). Without it the git extraction still runs
+and says it left the function measures out.
 
 Erlang is installed as the split packages the bundle uses (`erlang-core`,
 `erlang-ssl`, `erlang-inets` and five more), because Arch no longer has
